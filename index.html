@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Cell Cycle, Recombination & Checkpoint Guard Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Chart.js for real-time graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        bio: {
+                            dark: '#0B0F19',
+                            card: '#111827',
+                            border: '#1F2937',
+                            cyan: '#06B6D4',
+                            magenta: '#EC4899',
+                            green: '#10B981',
+                            amber: '#F59E0B',
+                            purple: '#8B5CF6',
+                            red: '#EF4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #070A11;
+            color: #E5E7EB;
+            overflow-x: hidden;
+        }
+        canvas {
+            outline: none;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0B0F19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1F2937;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #374151;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.35);
+        }
+        .glow-red {
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
+        }
+        .glow-green {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+        }
+        .tab-btn.active {
+            border-bottom: 2px solid #06B6D4;
+            color: #06B6D4;
+            background: rgba(6, 182, 212, 0.08);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen select-none">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-bio-card/90 border-b border-bio-border px-4 py-3 flex flex-wrap items-center justify-between shrink-0 z-20 backdrop-blur">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30 text-cyan-400">
+                <i class="fa-solid fa-dna text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-extrabold text-lg tracking-wide text-white flex items-center gap-2">
+                    BioLab 3D <span class="text-xs font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">v2.5</span>
+                </h1>
+                <p class="text-xs text-gray-400">Mitosis, Meiotic Recombination & Cell Cycle Checkpoints</p>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="flex space-x-1 mt-2 sm:mt-0 bg-gray-900/80 p-1 rounded-lg border border-bio-border text-xs md:text-sm font-medium">
+            <button onclick="switchTab('tab-cell-cycle')" id="btn-tab-cell-cycle" class="tab-btn active px-3 py-1.5 rounded-md transition duration-200 flex items-center gap-2">
+                <i class="fa-solid fa-rotate text-cyan-400"></i> <span>Cell Cycle Explorer</span>
+            </button>
+            <button onclick="switchTab('tab-meiosis')" id="btn-tab-meiosis" class="tab-btn px-3 py-1.5 rounded-md transition duration-200 flex items-center gap-2">
+                <i class="fa-solid fa-code-fork text-magenta-400"></i> <span>Meiotic Recombination</span>
+            </button>
+            <button onclick="switchTab('tab-guard')" id="btn-tab-guard" class="tab-btn px-3 py-1.5 rounded-md transition duration-200 flex items-center gap-2">
+                <i class="fa-solid fa-shield-halved text-green-400"></i> <span>Checkpoint Guard</span>
+            </button>
+            <button onclick="switchTab('tab-guide')" id="btn-tab-guide" class="tab-btn px-3 py-1.5 rounded-md transition duration-200 flex items-center gap-2">
+                <i class="fa-solid fa-book-open text-amber-400"></i> <span>Guide & Assessment</span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-1 relative overflow-hidden flex flex-col">
+
+        <!-- ================= TAB 1: CELL CYCLE & MITOSIS EXPLORER ================= -->
+        <section id="tab-cell-cycle" class="tab-content flex-1 grid grid-cols-1 lg:grid-cols-4 h-full relative">
+            <!-- 3D Canvas Area (3 Cols) -->
+            <div class="lg:col-span-3 relative bg-bio-dark flex flex-col h-full">
+                <!-- 3D Canvas -->
+                <div id="cell-3d-container" class="w-full flex-1 relative cursor-grab active:cursor-grabbing">
+                    <!-- Overlay Controls / Indicators -->
+                    <div class="absolute top-4 left-4 bg-bio-card/80 border border-bio-border backdrop-blur p-3 rounded-lg z-10">
+                        <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Active State</div>
+                        <div id="phase-badge" class="text-lg font-bold text-cyan-400 font-mono mt-0.5">Interphase: G1 Phase</div>
+                        <div id="phase-desc" class="text-xs text-gray-300 max-w-xs mt-1">Cell grows, synthesizes RNA and proteins required for DNA replication.</div>
+                    </div>
+
+                    <div class="absolute top-4 right-4 bg-bio-card/80 border border-bio-border backdrop-blur p-2 rounded-lg z-10 flex gap-2">
+                        <button id="btn-reset-cam" title="Reset View" class="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs">
+                            <i class="fa-solid fa-video"></i> Reset View
+                        </button>
+                        <button id="btn-toggle-organelles" title="Toggle Organelles" class="p-2 bg-gray-800 hover:bg-gray-700 text-cyan-400 rounded text-xs">
+                            <i class="fa-solid fa-eye"></i> Organelles
+                        </button>
+                    </div>
+
+                    <!-- HUD Telemetry -->
+                    <div class="absolute bottom-4 left-4 bg-bio-card/80 border border-bio-border backdrop-blur px-3 py-2 rounded-lg z-10 text-xs font-mono space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span>
+                            <span class="text-gray-300">Nuclear Envelope: <span id="hud-envelope" class="text-white">Intact</span></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-magenta-400 inline-block"></span>
+                            <span class="text-gray-300">DNA State: <span id="hud-chromatin" class="text-white">Decondensed Chromatin</span></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
+                            <span class="text-gray-300">Microtubules: <span id="hud-spindle" class="text-white">Cytoskeletal Network</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase Timeline Control Bar -->
+                <div class="bg-bio-card border-t border-bio-border p-3 flex flex-col gap-2 z-10">
+                    <div class="flex justify-between items-center text-xs text-gray-400">
+                        <span>Cell Cycle Progression</span>
+                        <span id="cycle-progress-percent" class="font-mono text-cyan-400">0%</span>
+                    </div>
+                    <!-- Timeline Buttons -->
+                    <div class="grid grid-cols-7 gap-1">
+                        <button onclick="setPhase('G1')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30">G1</button>
+                        <button onclick="setPhase('S')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700">S Phase</button>
+                        <button onclick="setPhase('G2')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700">G2</button>
+                        <button onclick="setPhase('Prophase')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700">Prophase</button>
+                        <button onclick="setPhase('Metaphase')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700">Metaphase</button>
+                        <button onclick="setPhase('Anaphase')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700">Anaphase</button>
+                        <button onclick="setPhase('Telophase')" class="phase-btn py-1.5 rounded text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700">Telophase</button>
+                    </div>
+                    <!-- Auto-Play Controls -->
+                    <div class="flex items-center justify-between pt-1">
+                        <div class="flex items-center space-x-2">
+                            <button id="btn-play-cycle" class="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-medium flex items-center gap-1">
+                                <i class="fa-solid fa-play"></i> Play Cycle
+                            </button>
+                            <button id="btn-pause-cycle" class="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-medium flex items-center gap-1">
+                                <i class="fa-solid fa-pause"></i> Pause
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <span class="text-gray-400">Speed:</span>
+                            <input type="range" id="cycle-speed-slider" min="0.2" max="3" step="0.1" value="1" class="w-24 accent-cyan-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Info & Molecular Details (1 Col) -->
+            <div class="bg-bio-card border-l border-bio-border p-4 flex flex-col h-full overflow-y-auto space-y-4">
+                <h2 class="text-sm font-bold text-gray-200 uppercase tracking-wider border-b border-bio-border pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-cyan-400"></i> Phase Molecular Dynamics
+                </h2>
+
+                <!-- Dynamic Info Panel -->
+                <div class="space-y-3 text-xs">
+                    <div class="p-3 bg-gray-900/60 rounded-lg border border-gray-800 space-y-1">
+                        <div class="text-gray-400 font-semibold">Morphological Changes:</div>
+                        <p id="info-morphology" class="text-gray-300 leading-relaxed">High metabolic activity. Centrosome begins replication. Chromatin is accessible for transcription.</p>
+                    </div>
+
+                    <div class="p-3 bg-gray-900/60 rounded-lg border border-gray-800 space-y-1">
+                        <div class="text-gray-400 font-semibold">Master Regulator:</div>
+                        <div id="info-cyclin" class="text-cyan-400 font-mono">Cyclin D / CDK4 & CDK6</div>
+                        <p id="info-cyclin-desc" class="text-gray-300 text-xs">Phosphorylates Rb protein, releasing E2F transcription factor to initiate S-phase gene expression.</p>
+                    </div>
+
+                    <div class="p-3 bg-gray-900/60 rounded-lg border border-gray-800 space-y-1">
+                        <div class="text-gray-400 font-semibold">Key Checkpoints Active:</div>
+                        <div id="info-checkpoint" class="text-green-400 font-semibold">G1 Restriction Point (R)</div>
+                        <p id="info-checkpoint-desc" class="text-gray-300">Evaluates cell size, nutrient availability, growth factors, and DNA integrity before commitment to S phase.</p>
+                    </div>
+                </div>
+
+                <div class="border-t border-bio-border pt-3">
+                    <h3 class="text-xs font-bold text-gray-300 mb-2">Cyclin-CDK Activity Spectrum</h3>
+                    <div class="h-32 w-full bg-gray-900 rounded p-1">
+                        <canvas id="chart-cyclin-mini"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ================= TAB 2: MEIOTIC RECOMBINATION STUDIO ================= -->
+        <section id="tab-meiosis" class="tab-content flex-1 grid grid-cols-1 lg:grid-cols-4 h-full relative hidden">
+            <!-- 3D Canvas Area -->
+            <div class="lg:col-span-3 relative bg-bio-dark flex flex-col h-full">
+                <div id="meiosis-3d-container" class="w-full flex-1 relative cursor-grab active:cursor-grabbing">
+                    <div class="absolute top-4 left-4 bg-bio-card/80 border border-bio-border backdrop-blur p-3 rounded-lg z-10 max-w-sm">
+                        <div class="text-xs text-magenta-400 font-mono font-semibold uppercase">Meiotic Prophase I</div>
+                        <div id="meiosis-stage-title" class="text-base font-bold text-white mt-0.5">Pachytene: Synaptonemal Complex & Crossing Over</div>
+                        <p id="meiosis-stage-desc" class="text-xs text-gray-300 mt-1">Homologous non-sister chromatids form chiasmata and exchange reciprocal DNA segments.</p>
+                    </div>
+
+                    <div class="absolute bottom-4 left-4 bg-bio-card/80 border border-bio-border backdrop-blur p-3 rounded-lg z-10 text-xs space-y-2 max-w-md">
+                        <div class="text-gray-300 font-semibold">Legend:</div>
+                        <div class="flex items-center gap-4">
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-cyan-500 inline-block"></span> Paternal Chromosome</span>
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-magenta-500 inline-block"></span> Maternal Chromosome</span>
+                        </div>
+                        <div class="text-gray-400 text-[11px] border-t border-gray-800 pt-1">
+                            Observe recombinant chromatids with mosaic color segments post-chiasmata resolution.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Toolbar for Meiosis -->
+                <div class="bg-bio-card border-t border-bio-border p-3 flex flex-wrap items-center justify-between gap-2 z-10">
+                    <div class="flex items-center space-x-2">
+                        <button onclick="setMeiosisStage('synapsis')" class="px-3 py-1.5 bg-magenta-500/20 text-magenta-300 border border-magenta-500/40 rounded text-xs font-medium hover:bg-magenta-500/30">
+                            1. Synapsis (Leptotene/Zygotene)
+                        </button>
+                        <button onclick="setMeiosisStage('crossing')" class="px-3 py-1.5 bg-gray-800 text-gray-300 border border-gray-700 rounded text-xs font-medium hover:bg-gray-700">
+                            2. Crossing Over (Pachytene)
+                        </button>
+                        <button onclick="setMeiosisStage('chiasmata')" class="px-3 py-1.5 bg-gray-800 text-gray-300 border border-gray-700 rounded text-xs font-medium hover:bg-gray-700">
+                            3. Chiasmata Resolution (Diplotene)
+                        </button>
+                        <button onclick="setMeiosisStage('metaphase1')" class="px-3 py-1.5 bg-gray-800 text-gray-300 border border-gray-700 rounded text-xs font-medium hover:bg-gray-700">
+                            4. Metaphase I Alignment
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                        <label class="text-xs text-gray-300 flex items-center gap-2">
+                            <span>Chiasma Frequency:</span>
+                            <input type="range" id="chiasma-count" min="1" max="4" value="2" class="w-20 accent-magenta-500">
+                            <span id="chiasma-val" class="font-mono text-magenta-400">2</span>
+                        </label>
+                        <button id="btn-reassort" class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded flex items-center gap-1">
+                            <i class="fa-solid fa-shuffle"></i> Randomize Reassortment
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Meiosis Details Sidebar -->
+            <div class="bg-bio-card border-l border-bio-border p-4 flex flex-col h-full overflow-y-auto space-y-4">
+                <h2 class="text-sm font-bold text-gray-200 uppercase tracking-wider border-b border-bio-border pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-dna text-magenta-400"></i> Genetic Recombination Mechanics
+                </h2>
+
+                <div class="space-y-3 text-xs">
+                    <div class="p-3 bg-gray-900/60 rounded-lg border border-gray-800">
+                        <h4 class="font-semibold text-magenta-400">Synaptonemal Complex (SC)</h4>
+                        <p class="text-gray-300 mt-1">A protein lattice (SYCP1, SYCP2, SYCP3) zipper-locks non-sister chromatids ~100 nm apart, facilitating precise molecular homology alignment.</p>
+                    </div>
+
+                    <div class="p-3 bg-gray-900/60 rounded-lg border border-gray-800">
+                        <h4 class="font-semibold text-cyan-400">Spo11 & Homologous Recombination</h4>
+                        <p class="text-gray-300 mt-1">Spo11 protein induces targeted double-strand breaks (DSBs). Rad51 and Dmc1 recombinases catalyze strand invasion, generating Holliday Junctions.</p>
+                    </div>
+
+                    <div class="p-3 bg-gray-900/60 rounded-lg border border-gray-800">
+                        <h4 class="font-semibold text-amber-400">Independent Assortment (Mendel's 2nd Law)</h4>
+                        <p class="text-gray-300 mt-1">Random orientation of bivalents along the metaphase I plate generates $2^n$ gametic variations ($2^{23} \approx 8.39 \times 10^6$ combinations in humans).</p>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-magenta-950/40 to-cyan-950/40 border border-magenta-500/30 rounded-lg p-3 text-xs space-y-2">
+                    <div class="font-bold text-white flex items-center gap-1">
+                        <i class="fa-solid fa-calculator text-magenta-400"></i> Diversity Calculator
+                    </div>
+                    <div class="text-gray-300">
+                        Gametic Potential: <span class="font-mono text-cyan-400 font-semibold">2²³ × Crossing Over</span>
+                    </div>
+                    <p class="text-[11px] text-gray-400 leading-tight">Virtually infinite genetic combinations produced per meiotic event due to reciprocal exchange during Prophase I.</p>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ================= TAB 3: CHECKPOINT GUARD & CANCER SIMULATOR ================= -->
+        <section id="tab-guard" class="tab-content flex-1 grid grid-cols-1 lg:grid-cols-4 h-full relative hidden">
+            <!-- Left Controls & Sliders (1 Col) -->
+            <div class="bg-bio-card border-r border-bio-border p-4 flex flex-col h-full overflow-y-auto space-y-4 z-10">
+                <h2 class="text-sm font-bold text-gray-200 uppercase tracking-wider border-b border-bio-border pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-green-400"></i> Molecular Parameters
+                </h2>
+
+                <!-- Cell Genetic Profile Presets -->
+                <div class="space-y-1.5">
+                    <label class="text-xs text-gray-400 font-semibold uppercase">Cell Type / Genetic Phenotype</label>
+                    <select id="select-phenotype" onchange="applyPhenotypePreset()" class="w-full bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-white focus:border-green-500 focus:outline-none font-mono">
+                        <option value="normal">Wild-Type Normal Homeostatic Cell</option>
+                        <option value="p53-mutant">Loss-of-Function p53 Mutation (Tumor Suppressor (-/-))</option>
+                        <option value="oncogene">Oncogenic Hyperactivation (Ras/Raf/Cyclin D+++)</option>
+                        <option value="double-mutant">High-Grade Malignancy (p53-/- + Proto-Oncogene)</option>
+                    </select>
+                </div>
+
+                <!-- DNA Damage Induction Slider -->
+                <div class="bg-gray-900/80 p-3 rounded-lg border border-gray-800 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-red-400 flex items-center gap-1">
+                            <i class="fa-solid fa-radiation"></i> DNA Break Severity (DSBs)
+                        </span>
+                        <span id="val-dna-damage" class="text-xs font-mono text-red-400 font-bold">0 DSBs</span>
+                    </div>
+                    <input type="range" id="slider-dna-damage" min="0" max="100" value="0" class="w-full accent-red-500 cursor-pointer" oninput="updateGuardSimulation()">
+                    <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>Intact</span>
+                        <span>Moderate</span>
+                        <span>Lethal DSBs</span>
+                    </div>
+                </div>
+
+                <!-- Cyclin / CDK Complex Controllers -->
+                <div class="space-y-3">
+                    <div class="text-xs font-semibold text-gray-300 uppercase tracking-wide">Cyclin - CDK Titrations</div>
+
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-cyan-400 font-mono">Cyclin D / CDK4-6 (G1 Phase)</span>
+                            <span id="val-cyclinD" class="font-mono text-gray-300">1.0x</span>
+                        </div>
+                        <input type="range" id="slider-cyclinD" min="0" max="3" step="0.1" value="1.0" class="w-full accent-cyan-500" oninput="updateGuardSimulation()">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-magenta-400 font-mono">Cyclin E / CDK2 (G1/S Transition)</span>
+                            <span id="val-cyclinE" class="font-mono text-gray-300">1.0x</span>
+                        </div>
+                        <input type="range" id="slider-cyclinE" min="0" max="3" step="0.1" value="1.0" class="w-full accent-magenta-500" oninput="updateGuardSimulation()">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-amber-400 font-mono">Cyclin B / CDK1 (G2/M - MPF)</span>
+                            <span id="val-cyclinB" class="font-mono text-gray-300">1.0x</span>
+                        </div>
+                        <input type="range" id="slider-cyclinB" min="0" max="3" step="0.1" value="1.0" class="w-full accent-amber-500" oninput="updateGuardSimulation()">
+                    </div>
+                </div>
+
+                <!-- Spindle Assembly Checkpoint (SAC) -->
+                <div class="bg-gray-900/80 p-3 rounded-lg border border-gray-800 space-y-2">
+                    <div class="text-xs font-semibold text-purple-400 flex items-center justify-between">
+                        <span>Kinetochore Attachment (SAC)</span>
+                        <span id="val-sac-attach" class="font-mono text-xs">100% Attached</span>
+                    </div>
+                    <input type="range" id="slider-sac" min="0" max="100" value="100" class="w-full accent-purple-500" oninput="updateGuardSimulation()">
+                    <div class="text-[11px] text-gray-400">Mad2 / BubR1 Inhibitory Complex binding status.</div>
+                </div>
+
+                <button onclick="resetGuardParameters()" class="w-full py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded font-medium transition">
+                    Reset Default Homeostasis
+                </button>
+            </div>
+
+            <!-- Central Simulation Canvas & Signal Flow (2 Cols) -->
+            <div class="lg:col-span-2 relative bg-bio-dark flex flex-col h-full border-r border-bio-border">
+                <!-- Status Banner Top -->
+                <div class="bg-bio-card/90 border-b border-bio-border p-3 flex items-center justify-between z-10 backdrop-blur">
+                    <div>
+                        <div class="text-[10px] text-gray-400 font-mono uppercase">Cell Cycle Checkpoint Status</div>
+                        <div id="status-cell-outcome" class="text-base font-extrabold text-green-400 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-check"></i> NORMAL CELL PROGRESSION (G1 $\rightarrow$ S)
+                        </div>
+                    </div>
+                    <div id="status-fate-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-green-500/20 text-green-400 border border-green-500/40">
+                        Homeostasis
+                    </div>
+                </div>
+
+                <!-- 3D Cellular Response Canvas -->
+                <div id="guard-3d-container" class="w-full flex-1 relative">
+                    <!-- Live Signal Pathway Diagram Overlay -->
+                    <div class="absolute bottom-4 left-4 right-4 bg-bio-card/90 border border-bio-border p-3 rounded-xl backdrop-blur">
+                        <div class="text-xs font-bold text-gray-300 mb-2 flex items-center justify-between">
+                            <span><i class="fa-solid fa-diagram-project text-cyan-400"></i> Active p53 Signal Cascade Flow</span>
+                            <span id="p53-level-text" class="font-mono text-cyan-400">p53 Active: Low</span>
+                        </div>
+                        <div class="grid grid-cols-5 gap-1.5 text-[11px] font-mono text-center">
+                            <div id="node-atm" class="p-2 rounded bg-gray-900 border border-gray-800 text-gray-400 transition-all duration-300">
+                                ATM / ATR Kinase
+                            </div>
+                            <div id="node-p53" class="p-2 rounded bg-gray-900 border border-gray-800 text-gray-400 transition-all duration-300">
+                                p53 Phospho
+                            </div>
+                            <div id="node-p21" class="p-2 rounded bg-gray-900 border border-gray-800 text-gray-400 transition-all duration-300">
+                                p21 (CDK Inhibitor)
+                            </div>
+                            <div id="node-arrest" class="p-2 rounded bg-gray-900 border border-gray-800 text-gray-400 transition-all duration-300">
+                                Cell Cycle Arrest / Repair
+                            </div>
+                            <div id="node-bax" class="p-2 rounded bg-gray-900 border border-gray-800 text-gray-400 transition-all duration-300">
+                                Bax / PUMA (Apoptosis)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Telemetry & Proliferation Graph (1 Col) -->
+            <div class="bg-bio-card p-4 flex flex-col h-full overflow-y-auto space-y-4">
+                <h2 class="text-sm font-bold text-gray-200 uppercase tracking-wider border-b border-bio-border pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-cyan-400"></i> Proliferation & Kinetic Real-Time Analytics
+                </h2>
+
+                <!-- Cancer Proliferation Live Chart -->
+                <div class="bg-gray-900 p-2 rounded-lg border border-gray-800 space-y-1">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-gray-300 font-semibold">Population Proliferation Rate</span>
+                        <span id="chart-population-label" class="font-mono text-green-400 font-bold">Stable (Normal)</span>
+                    </div>
+                    <div class="h-44 w-full">
+                        <canvas id="chart-proliferation"></canvas>
+                    </div>
+                </div>
+
+                <!-- Biochemical Metrics -->
+                <div class="space-y-2 text-xs font-mono">
+                    <div class="p-2.5 bg-gray-900/60 rounded border border-gray-800 flex justify-between">
+                        <span class="text-gray-400">CDK2 Inhibitory Index:</span>
+                        <span id="metric-cdk2-inh" class="text-cyan-400 font-bold">0%</span>
+                    </div>
+                    <div class="p-2.5 bg-gray-900/60 rounded border border-gray-800 flex justify-between">
+                        <span class="text-gray-400">Apoptotic Signal Potential:</span>
+                        <span id="metric-apoptosis-pot" class="text-magenta-400 font-bold">Low (5%)</span>
+                    </div>
+                    <div class="p-2.5 bg-gray-900/60 rounded border border-gray-800 flex justify-between">
+                        <span class="text-gray-400">Genomic Instability Risk:</span>
+                        <span id="metric-mutagenesis-risk" class="text-green-400 font-bold">Minimal</span>
+                    </div>
+                </div>
+
+                <!-- Explanatory Box -->
+                <div class="p-3 bg-cyan-950/30 border border-cyan-500/30 rounded-lg text-xs space-y-1">
+                    <div class="font-bold text-cyan-400 flex items-center gap-1">
+                        <i class="fa-solid fa-lightbulb"></i> Molecular Insight
+                    </div>
+                    <p id="guard-insight-text" class="text-gray-300 leading-normal">
+                        Under normal condition with intact p53, moderate DNA damage triggers p21 upregulation, transiently arresting the cell in G1/S to enable BER/NER repair enzymes.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ================= TAB 4: INSTRUCTIONAL GUIDE & ASSESSMENT ================= -->
+        <section id="tab-guide" class="tab-content flex-1 bg-bio-dark overflow-y-auto p-6 text-gray-200 hidden">
+            <div class="max-w-5xl mx-auto space-y-8">
+
+                <!-- Header -->
+                <div class="border-b border-bio-border pb-4">
+                    <h2 class="text-2xl font-extrabold text-white tracking-wide">Instructional Guide: Mitosis, Meiosis & Cell Cycle Checkpoints</h2>
+                    <p class="text-sm text-gray-400 mt-1">Comprehensive biochemical reference manual and self-assessment suite for cellular replication and oncogenesis.</p>
+                </div>
+
+                <!-- Grid of Core Concepts -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                    <!-- Concept 1 -->
+                    <div class="bg-bio-card border border-bio-border rounded-xl p-5 space-y-3">
+                        <div class="p-2.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 w-fit rounded-lg">
+                            <i class="fa-solid fa-rotate text-xl"></i>
+                        </div>
+                        <h3 class="text-base font-bold text-white">1. Cell Cycle & Mitotic Engine</h3>
+                        <p class="text-xs text-gray-300 leading-relaxed">
+                            The eukaryotic cell cycle comprises Interphase ($\text{G}_1, \text{S}, \text{G}_2$) and Mitotic ($\text{M}$) phase. Oscillations of **Cyclin-CDK heterodimers** drive transitions:
+                        </p>
+                        <ul class="text-xs text-gray-400 list-disc list-inside space-y-1 font-mono">
+                            <li>G1/S: Cyclin E + CDK2</li>
+                            <li>S Phase: Cyclin A + CDK2</li>
+                            <li>G2/M: Cyclin B + CDK1 (MPF)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Concept 2 -->
+                    <div class="bg-bio-card border border-bio-border rounded-xl p-5 space-y-3">
+                        <div class="p-2.5 bg-magenta-500/10 border border-magenta-500/30 text-magenta-400 w-fit rounded-lg">
+                            <i class="fa-solid fa-code-fork text-xl"></i>
+                        </div>
+                        <h3 class="text-base font-bold text-white">2. Meiotic Recombination & Reassortment</h3>
+                        <p class="text-xs text-gray-300 leading-relaxed">
+                            Meiosis generates haploid gametes with unique genetic architecture. Key mechanisms:
+                        </p>
+                        <ul class="text-xs text-gray-400 list-disc list-inside space-y-1">
+                            <li><strong class="text-gray-200">Synapsis:</strong> Homologous pairing in Prophase I via synaptonemal complex.</li>
+                            <li><strong class="text-gray-200">Chiasmata:</strong> Reciprocal physical crossing over of non-sister chromatids.</li>
+                            <li><strong class="text-gray-200">Independent Assortment:</strong> Random bivalent alignment at Metaphase I plate.</li>
+                        </ul>
+                    </div>
+
+                    <!-- Concept 3 -->
+                    <div class="bg-bio-card border border-bio-border rounded-xl p-5 space-y-3">
+                        <div class="p-2.5 bg-green-500/10 border border-green-500/30 text-green-400 w-fit rounded-lg">
+                            <i class="fa-solid fa-shield-halved text-xl"></i>
+                        </div>
+                        <h3 class="text-base font-bold text-white">3. Checkpoint Surveillance & Oncogenesis</h3>
+                        <p class="text-xs text-gray-300 leading-relaxed">
+                            Checkpoints maintain genomic fidelity:
+                        </p>
+                        <ul class="text-xs text-gray-400 list-disc list-inside space-y-1">
+                            <li><strong class="text-gray-200">p53 "Guardian of Genome":</strong> Upregulates p21 (CDK inhibitor) for repair or Bax/PUMA for apoptosis.</li>
+                            <li><strong class="text-gray-200">Proto-oncogenes vs. Oncogenes:</strong> Gain-of-function mutations (e.g., Ras, Cyclin D overexpression) drive unchecked proliferation.</li>
+                            <li><strong class="text-gray-200">Tumor Suppressors:</strong> Loss-of-function (e.g., TP53, Rb) bypasses arrest checkpoints.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Self-Assessment Quiz Section -->
+                <div class="bg-bio-card border border-bio-border rounded-xl p-6 space-y-4">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2 border-b border-bio-border pb-3">
+                        <i class="fa-solid fa-graduation-cap text-amber-400"></i> Knowledge Check & Interactive Quiz
+                    </h3>
+
+                    <div id="quiz-container" class="space-y-6 text-sm">
+                        <!-- Q1 -->
+                        <div class="space-y-2" id="q1-box">
+                            <div class="font-semibold text-gray-200">1. What is the immediate direct target transcriptionally activated by phosphorylated p53 following moderate DNA damage to arrest the cell in G1/S?</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <button onclick="checkAnswer(1, 'A')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">A) Cyclin B</button>
+                                <button onclick="checkAnswer(1, 'B')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">B) p21 (CDKN1A)</button>
+                                <button onclick="checkAnswer(1, 'C')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">C) Caspase-3</button>
+                                <button onclick="checkAnswer(1, 'D')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">D) E2F transcription factor</button>
+                            </div>
+                            <div id="q1-feedback" class="text-xs hidden font-medium mt-1"></div>
+                        </div>
+
+                        <!-- Q2 -->
+                        <div class="space-y-2" id="q2-box">
+                            <div class="font-semibold text-gray-200">2. Which meiotic sub-stage of Prophase I is characterized by physical reciprocal genetic crossing over and chiasmata formation?</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <button onclick="checkAnswer(2, 'A')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">A) Leptotene</button>
+                                <button onclick="checkAnswer(2, 'B')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">B) Zygotene</button>
+                                <button onclick="checkAnswer(2, 'C')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">C) Pachytene</button>
+                                <button onclick="checkAnswer(2, 'D')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">D) Diakinesis</button>
+                            </div>
+                            <div id="q2-feedback" class="text-xs hidden font-medium mt-1"></div>
+                        </div>
+
+                        <!-- Q3 -->
+                        <div class="space-y-2" id="q3-box">
+                            <div class="font-semibold text-gray-200">3. A loss-of-function mutation in both alleles of TP53 (p53 -/-) in the presence of un-repaired double-strand DNA breaks causes:</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <button onclick="checkAnswer(3, 'A')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">A) Immediate apoptotic destruction</button>
+                                <button onclick="checkAnswer(3, 'B')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">B) Permanent senescence</button>
+                                <button onclick="checkAnswer(3, 'C')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">C) Bypass of G1/S arrest and propagation of genomic instability</button>
+                                <button onclick="checkAnswer(3, 'D')" class="quiz-opt border border-gray-700 bg-gray-900 hover:bg-gray-800 p-2.5 rounded text-left transition">D) Inhibition of Cyclin D/CDK4 activity</button>
+                            </div>
+                            <div id="q3-feedback" class="text-xs hidden font-medium mt-1"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- App JavaScript Logic & 3D Engine -->
+    <script>
+        /* =========================================================================
+           GLOBAL STATE & TAB SWITCHING
+           ========================================================================= */
+        let currentTab = 'tab-cell-cycle';
+
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById('btn-' + tabId).classList.add('active');
+
+            // Trigger window resize to recalculate Three.js canvas size
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        /* =========================================================================
+           TAB 1: 3D CELL CYCLE & MITOSIS EXPLORER ENGINE
+           ========================================================================= */
+        let cellScene, cellCamera, cellRenderer, cellControls;
+        let nucleusMesh, cellMembrane, centrioleGroup, spindleGroup, chromosomesGroup;
+        let currentPhase = 'G1';
+        let cycleAnimId = null;
+        let isCyclePlaying = false;
+        let cycleProgress = 0; // 0 to 1
+        let showOrganelles = true;
+
+        const phaseConfig = {
+            'G1': { text: 'Interphase: G1 Phase', desc: 'Cell grows, synthesizes RNA and proteins required for DNA replication.', morph: 'High metabolic activity. Centrosome begins replication. Chromatin is accessible for transcription.', cyclin: 'Cyclin D / CDK4 & CDK6', cyclinDesc: 'Phosphorylates Rb protein, releasing E2F transcription factor to initiate S-phase gene expression.', checkpoint: 'G1 Restriction Point (R)', checkDesc: 'Evaluates cell size, nutrient availability, growth factors, and DNA integrity before commitment to S phase.', envelope: 'Intact', chromatin: 'Decondensed Chromatin', spindle: 'Cytoskeletal Network' },
+            'S': { text: 'Interphase: S Phase', desc: 'S-Phase DNA replication occurs; centrosomes duplicate.', morph: 'DNA content doubles from 2C to 4C. Cohesin complexes ring sister chromatids.', cyclin: 'Cyclin E / Cyclin A + CDK2', cyclinDesc: 'Activates MCM helicase and replication forks at origins of replication.', checkpoint: 'S-Phase DNA Damage Checkpoint', checkDesc: 'Monitors replication fork stability and prevents re-replication.', envelope: 'Intact', chromatin: 'Replicating Chromatin', spindle: 'Duplicating Centrosomes' },
+            'G2': { text: 'Interphase: G2 Phase', desc: 'Cell completes preparation for mitosis; synthesizes microtubules.', morph: 'Cell reaches peak volume. Check for un-repaired DNA breaks.', cyclin: 'Cyclin A / Cyclin B + CDK1', cyclinDesc: 'Prepares for nuclear envelope breakdown and chromatin condensation.', checkpoint: 'G2/M DNA Damage Checkpoint', checkDesc: 'Prevents entry into mitosis in the presence of double-strand breaks.', envelope: 'Intact', chromatin: 'Fully Replicated 4C Chromatin', spindle: 'Two Separated Centrosomes' },
+            'Prophase': { text: 'Mitosis: Prophase', desc: 'Chromatin condenses into visible chromosomes; spindle apparatus forms.', morph: 'Nuclear envelope begins vesiculation. Centrosomes move to opposite poles.', cyclin: 'Cyclin B / CDK1 (MPF High)', cyclinDesc: 'Phosphorylates nuclear lamins causing envelope breakdown and condensin activation.', checkpoint: 'Antephase Checkpoint', checkDesc: 'Monitors early chromosome condensation.', envelope: 'Dissolving', chromatin: 'Condensed Sister Chromatids', spindle: 'Bipolar Spindle Assembly' },
+            'Metaphase': { text: 'Mitosis: Metaphase', desc: 'Chromosomes align along equatorial metaphase plate.', morph: 'Kinetochore microtubules attach to chromosome kinetochores under tension.', cyclin: 'Cyclin B / CDK1 Peak', cyclinDesc: 'Maintains mitotic state until all kinetochores achieve amphitelic attachment.', checkpoint: 'Spindle Assembly Checkpoint (SAC)', checkDesc: 'Mad2/BubR1 mechanism inhibits APC/C-Cdc20 until all kinetochores are attached.', envelope: 'Dissolved', chromatin: 'Aligned at Equatorial Plate', spindle: 'Kinetochore & Polar Fibers' },
+            'Anaphase': { text: 'Mitosis: Anaphase', desc: 'Sister chromatids split and move toward opposite spindle poles.', morph: 'APC/C degrades Securin $\\rightarrow$ Separase cleaves Cohesin rings.', cyclin: 'Cyclin B Degraded via APC/C', cyclinDesc: 'Destruction of Cyclin B permits mitotic exit.', checkpoint: 'Anaphase-to-Telophase Transition', checkDesc: 'Ensures equal chromosome segregation without lagging chromosomes.', envelope: 'None', chromatin: 'Daughter Chromosomes Moving', spindle: 'Shortening K-fibers' },
+            'Telophase': { text: 'Mitosis: Telophase & Cytokinesis', desc: 'Nuclear envelopes reform; cleavage furrow divides cell into 2 daughter cells.', morph: 'Actin-myosin contractile ring pinches cytoplasm; chromosomes decondense.', cyclin: 'CDK Low / Cyclin B Cleared', cyclinDesc: 'Dephosphorylation of lamin proteins allows nuclear membrane reconstruction.', checkpoint: 'Cytokinesis Completion', checkDesc: 'Ensures abscission of midbody structure.', envelope: 'Reforming', chromatin: 'Decondensing into Chromatin', spindle: 'Midbody Microtubules' }
+        };
+
+        function initCell3D() {
+            const container = document.getElementById('cell-3d-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            cellScene = new THREE.Scene();
+            cellScene.background = new THREE.Color(0x070a11);
+
+            cellCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            cellCamera.position.set(0, 15, 30);
+
+            cellRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            cellRenderer.setSize(width, height);
+            cellRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(cellRenderer.domElement);
+
+            cellControls = new THREE.OrbitControls(cellCamera, cellRenderer.domElement);
+            cellControls.enableDamping = true;
+            cellControls.dampingFactor = 0.05;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            cellScene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0x06b6d4, 1.2);
+            dirLight1.position.set(20, 20, 20);
+            cellScene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0xec4899, 0.8);
+            dirLight2.position.set(-20, -10, -20);
+            cellScene.add(dirLight2);
+
+            // Cell Outer Membrane (Semi-transparent sphere)
+            const memGeo = new THREE.SphereGeometry(10, 32, 32);
+            const memMat = new THREE.MeshPhongMaterial({
+                color: 0x06b6d4,
+                transparent: true,
+                opacity: 0.15,
+                wireframe: true,
+                side: THREE.DoubleSide
+            });
+            cellMembrane = new THREE.Mesh(memGeo, memMat);
+            cellScene.add(cellMembrane);
+
+            // Nuclear Envelope
+            const nucGeo = new THREE.SphereGeometry(4.5, 32, 32);
+            const nucMat = new THREE.MeshPhongMaterial({
+                color: 0x8b5cf6,
+                transparent: true,
+                opacity: 0.35,
+                shininess: 80
+            });
+            nucleusMesh = new THREE.Mesh(nucGeo, nucMat);
+            cellScene.add(nucleusMesh);
+
+            // Chromosomes Group
+            chromosomesGroup = new THREE.Group();
+            cellScene.add(chromosomesGroup);
+            buildChromosomes();
+
+            // Centrioles & Spindle Group
+            centrioleGroup = new THREE.Group();
+            spindleGroup = new THREE.Group();
+            cellScene.add(centrioleGroup);
+            cellScene.add(spindleGroup);
+            buildCentriolesAndSpindles();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                cellCamera.position.set(0, 15, 30);
+                cellControls.target.set(0, 0, 0);
+            });
+            document.getElementById('btn-toggle-organelles').addEventListener('click', () => {
+                showOrganelles = !showOrganelles;
+                cellMembrane.visible = showOrganelles;
+            });
+            document.getElementById('btn-play-cycle').addEventListener('click', playCycle);
+            document.getElementById('btn-pause-cycle').addEventListener('click', pauseCycle);
+
+            animateCellScene();
+        }
+
+        // Build 4 pairs of 3D Chromosomes (X-shapes)
+        function buildChromosomes() {
+            chromosomesGroup.clear();
+            const colors = [0x06b6d4, 0xec4899, 0x10b981, 0xf59e0b];
+
+            for (let i = 0; i < 4; i++) {
+                const chrom = new THREE.Group();
+                const mat = new THREE.MeshStandardMaterial({ color: colors[i], roughness: 0.3, metalness: 0.2 });
+
+                // Chromatid 1 (cylinder curve)
+                const arm1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3, 16), mat);
+                arm1.rotation.z = Math.PI / 4;
+                chrom.add(arm1);
+
+                // Chromatid 2
+                const arm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3, 16), mat);
+                arm2.rotation.z = -Math.PI / 4;
+                chrom.add(arm2);
+
+                // Centromere sphere
+                const cent = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                chrom.add(cent);
+
+                chrom.position.set((i - 1.5) * 1.8, 0, (Math.random() - 0.5) * 2);
+                chromosomesGroup.add(chrom);
+            }
+        }
+
+        function buildCentriolesAndSpindles() {
+            centrioleGroup.clear();
+            spindleGroup.clear();
+
+            const centMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b });
+            const c1 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12), centMat);
+            const c2 = c1.clone();
+            c1.position.set(-6, 0, 0);
+            c2.position.set(6, 0, 0);
+
+            centrioleGroup.add(c1);
+            centrioleGroup.add(c2);
+
+            // Spindle Microtubule Rays
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.4 });
+            for (let i = -2; i <= 2; i++) {
+                const geo1 = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-6, 0, 0),
+                    new THREE.Vector3(0, i * 1.2, (i % 2) * 1.5)
+                ]);
+                const geo2 = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(6, 0, 0),
+                    new THREE.Vector3(0, i * 1.2, (i % 2) * 1.5)
+                ]);
+                spindleGroup.add(new THREE.Line(geo1, lineMat));
+                spindleGroup.add(new THREE.Line(geo2, lineMat));
+            }
+            spindleGroup.visible = false;
+        }
+
+        function updateCellPhaseAnimation() {
+            const chroms = chromosomesGroup.children;
+
+            if (currentPhase === 'G1' || currentPhase === 'S' || currentPhase === 'G2') {
+                nucleusMesh.scale.set(1, 1, 1);
+                nucleusMesh.material.opacity = 0.35;
+                spindleGroup.visible = false;
+
+                // Decondensed loose positioning
+                chroms.forEach((c, idx) => {
+                    c.scale.set(0.6, 0.6, 0.6);
+                    c.position.set(Math.sin(idx + Date.now() * 0.001) * 1.5, Math.cos(idx) * 1.5, (idx - 1.5));
+                    c.rotation.x += 0.01;
+                });
+            } else if (currentPhase === 'Prophase') {
+                nucleusMesh.material.opacity = 0.15;
+                spindleGroup.visible = true;
+
+                chroms.forEach((c, idx) => {
+                    c.scale.set(1, 1, 1);
+                    c.position.lerp(new THREE.Vector3((idx - 1.5) * 1.5, 0, 0), 0.05);
+                });
+            } else if (currentPhase === 'Metaphase') {
+                nucleusMesh.material.opacity = 0.05;
+                spindleGroup.visible = true;
+
+                chroms.forEach((c, idx) => {
+                    c.position.set(0, (idx - 1.5) * 1.8, 0);
+                    c.rotation.z = Math.PI / 2;
+                });
+            } else if (currentPhase === 'Anaphase') {
+                nucleusMesh.material.opacity = 0.0;
+                spindleGroup.visible = true;
+
+                chroms.forEach((c, idx) => {
+                    const dir = idx < 2 ? -1 : 1;
+                    c.position.x = dir * 4.5;
+                    c.position.y = (idx % 2 - 0.5) * 2;
+                });
+            } else if (currentPhase === 'Telophase') {
+                nucleusMesh.material.opacity = 0.25;
+                spindleGroup.visible = false;
+            }
+        }
+
+        function setPhase(phase) {
+            currentPhase = phase;
+            const cfg = phaseConfig[phase];
+
+            document.getElementById('phase-badge').innerText = cfg.text;
+            document.getElementById('phase-desc').innerText = cfg.desc;
+            document.getElementById('info-morphology').innerText = cfg.morph;
+            document.getElementById('info-cyclin').innerText = cfg.cyclin;
+            document.getElementById('info-cyclin-desc').innerText = cfg.cyclinDesc;
+            document.getElementById('info-checkpoint').innerText = cfg.checkpoint;
+            document.getElementById('info-checkpoint-desc').innerText = cfg.checkDesc;
+
+            document.getElementById('hud-envelope').innerText = cfg.envelope;
+            document.getElementById('hud-chromatin').innerText = cfg.chromatin;
+            document.getElementById('hud-spindle').innerText = cfg.spindle;
+
+            updateCellPhaseAnimation();
+        }
+
+        function playCycle() {
+            if (isCyclePlaying) return;
+            isCyclePlaying = true;
+            const phases = ['G1', 'S', 'G2', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase'];
+            let idx = phases.indexOf(currentPhase);
+
+            cycleAnimId = setInterval(() => {
+                idx = (idx + 1) % phases.length;
+                setPhase(phases[idx]);
+                document.getElementById('cycle-progress-percent').innerText = Math.round(((idx + 1) / phases.length) * 100) + '%';
+            }, 2500 / parseFloat(document.getElementById('cycle-speed-slider').value));
+        }
+
+        function pauseCycle() {
+            isCyclePlaying = false;
+            if (cycleAnimId) clearInterval(cycleAnimId);
+        }
+
+        function animateCellScene() {
+            requestAnimationFrame(animateCellScene);
+            if (cellControls) cellControls.update();
+
+            // Slow idle spin
+            if (chromosomesGroup && (currentPhase === 'G1' || currentPhase === 'S')) {
+                chromosomesGroup.rotation.y += 0.003;
+            }
+
+            if (cellRenderer && cellScene && cellCamera) {
+                cellRenderer.render(cellScene, cellCamera);
+            }
+        }
+
+
+        /* =========================================================================
+           TAB 2: MEIOTIC RECOMBINATION ENGINE (3D CHIASMATA)
+           ========================================================================= */
+        let meiosisScene, meiosisCamera, meiosisRenderer, meiosisControls;
+        let paternalChrom, maternalChrom, chiasmaGroup;
+
+        function initMeiosis3D() {
+            const container = document.getElementById('meiosis-3d-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            meiosisScene = new THREE.Scene();
+            meiosisScene.background = new THREE.Color(0x070a11);
+
+            meiosisCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            meiosisCamera.position.set(0, 5, 20);
+
+            meiosisRenderer = new THREE.WebGLRenderer({ antialias: true });
+            meiosisRenderer.setSize(width, height);
+            meiosisRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(meiosisRenderer.domElement);
+
+            meiosisControls = new THREE.OrbitControls(meiosisCamera, meiosisRenderer.domElement);
+            meiosisControls.enableDamping = true;
+
+            // Lights
+            meiosisScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(10, 15, 10);
+            meiosisScene.add(light);
+
+            buildMeiosisBivalent();
+            animateMeiosisScene();
+        }
+
+        function buildMeiosisBivalent() {
+            if (paternalChrom) meiosisScene.remove(paternalChrom);
+            if (maternalChrom) meiosisScene.remove(maternalChrom);
+
+            paternalChrom = new THREE.Group();
+            maternalChrom = new THREE.Group();
+
+            const patMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.3 }); // Paternal Blue
+            const matMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.3 }); // Maternal Pink
+
+            // Homolog 1 (Paternal)
+            const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8, 16), patMat);
+            const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8, 16), patMat);
+            p1.position.x = -0.5;
+            p2.position.x = -1.3;
+            paternalChrom.add(p1); paternalChrom.add(p2);
+
+            // Homolog 2 (Maternal)
+            const m1 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8, 16), matMat);
+            const m2 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8, 16), matMat);
+            m1.position.x = 0.5;
+            m2.position.x = 1.3;
+            maternalChrom.add(m1); maternalChrom.add(m2);
+
+            paternalChrom.position.x = -0.8;
+            maternalChrom.position.x = 0.8;
+
+            meiosisScene.add(paternalChrom);
+            meiosisScene.add(maternalChrom);
+        }
+
+        function setMeiosisStage(stage) {
+            const title = document.getElementById('meiosis-stage-title');
+            const desc = document.getElementById('meiosis-stage-desc');
+
+            if (stage === 'synapsis') {
+                title.innerText = '1. Synapsis & Homologous Pairing (Leptotene/Zygotene)';
+                desc.innerText = 'Homologous chromosomes align along their lengths via the proteinaceous synaptonemal complex lattice.';
+                paternalChrom.position.x = -1.2;
+                maternalChrom.position.x = 1.2;
+                paternalChrom.rotation.z = 0;
+                maternalChrom.rotation.z = 0;
+            } else if (stage === 'crossing') {
+                title.innerText = '2. Reciprocal Crossing Over (Pachytene)';
+                desc.innerText = 'Spo11-induced double-strand breaks trigger strand invasion and Holliday junction formation between non-sister chromatids.';
+                paternalChrom.position.x = -0.4;
+                maternalChrom.position.x = 0.4;
+                paternalChrom.rotation.z = 0.15;
+                maternalChrom.rotation.z = -0.15;
+            } else if (stage === 'chiasmata') {
+                title.innerText = '3. Chiasmata Resolution (Diplotene / Diakinesis)';
+                desc.innerText = 'Synaptonemal complex degrades. Homologs remain bound exclusively at physical chiasmata sites displaying mosaic recombinant arms.';
+                paternalChrom.position.x = -0.9;
+                maternalChrom.position.x = 0.9;
+                paternalChrom.rotation.z = 0.3;
+                maternalChrom.rotation.z = -0.3;
+            } else if (stage === 'metaphase1') {
+                title.innerText = '4. Metaphase I Alignment & Independent Assortment';
+                desc.innerText = 'Bivalents align randomly at the metaphase equator. Maternal vs. Paternal orientation dictates independent genetic assortment.';
+                paternalChrom.position.set(0, 0, -1);
+                maternalChrom.position.set(0, 0, 1);
+                paternalChrom.rotation.z = Math.PI / 2;
+                maternalChrom.rotation.z = Math.PI / 2;
+            }
+        }
+
+        document.getElementById('chiasma-count').addEventListener('input', (e) => {
+            document.getElementById('chiasma-val').innerText = e.target.value;
+        });
+
+        document.getElementById('btn-reassort').addEventListener('click', () => {
+            // Flip orientation randomly
+            const flip = Math.random() > 0.5;
+            paternalChrom.position.z = flip ? 1 : -1;
+            maternalChrom.position.z = flip ? -1 : 1;
+        });
+
+        function animateMeiosisScene() {
+            requestAnimationFrame(animateMeiosisScene);
+            if (meiosisControls) meiosisControls.update();
+            if (meiosisRenderer && meiosisScene && meiosisCamera) {
+                meiosisRenderer.render(meiosisScene, meiosisCamera);
+            }
+        }
+
+
+        /* =========================================================================
+           TAB 3: "CELL CYCLE CHECKPOINT GUARD" & CANCER SIMULATOR
+           ========================================================================= */
+        let guardScene, guardCamera, guardRenderer, guardControls;
+        let guardCellMesh, p53Particles;
+        let proliferationChart;
+
+        function initGuard3D() {
+            const container = document.getElementById('guard-3d-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            guardScene = new THREE.Scene();
+            guardScene.background = new THREE.Color(0x070a11);
+
+            guardCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            guardCamera.position.set(0, 8, 18);
+
+            guardRenderer = new THREE.WebGLRenderer({ antialias: true });
+            guardRenderer.setSize(width, height);
+            guardRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(guardRenderer.domElement);
+
+            guardControls = new THREE.OrbitControls(guardCamera, guardRenderer.domElement);
+
+            // Lights
+            guardScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const pLight = new THREE.PointLight(0x10b981, 1.5, 30);
+            pLight.position.set(5, 5, 5);
+            guardScene.add(pLight);
+
+            // Central Cell Model
+            const cellGeo = new THREE.IcosahedronGeometry(4, 3);
+            const cellMat = new THREE.MeshStandardMaterial({
+                color: 0x10b981,
+                roughness: 0.2,
+                wireframe: false,
+                transparent: true,
+                opacity: 0.8
+            });
+            guardCellMesh = new THREE.Mesh(cellGeo, cellMat);
+            guardScene.add(guardCellMesh);
+
+            // p53 Floating Molecules (Particle Cloud)
+            const p53Geo = new THREE.BufferGeometry();
+            const p53Count = 150;
+            const posArray = new Float32Array(p53Count * 3);
+            for (let i = 0; i < p53Count * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 12;
+            }
+            p53Geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const p53Mat = new THREE.PointsMaterial({ size: 0.25, color: 0x06b6d4 });
+            p53Particles = new THREE.Points(p53Geo, p53Mat);
+            guardScene.add(p53Particles);
+
+            initProliferationChart();
+            animateGuardScene();
+            updateGuardSimulation();
+        }
+
+        function initProliferationChart() {
+            const ctx = document.getElementById('chart-proliferation').getContext('2d');
+            proliferationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['0h', '4h', '8h', '12h', '16h', '20h', '24h'],
+                    datasets: [{
+                        label: 'Cell Population Count',
+                        data: [100, 105, 110, 115, 120, 125, 130],
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF', font: { size: 10 } } },
+                        y: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function applyPhenotypePreset() {
+            const val = document.getElementById('select-phenotype').value;
+            const dsbSlider = document.getElementById('slider-dna-damage');
+            const cD = document.getElementById('slider-cyclinD');
+            const cE = document.getElementById('slider-cyclinE');
+
+            if (val === 'normal') {
+                dsbSlider.value = 0;
+                cD.value = 1.0;
+                cE.value = 1.0;
+            } else if (val === 'p53-mutant') {
+                dsbSlider.value = 60; // High damage but p53 lost
+                cD.value = 1.0;
+                cE.value = 1.0;
+            } else if (val === 'oncogene') {
+                dsbSlider.value = 10;
+                cD.value = 2.8; // Hyperactive Cyclin D / Ras
+                cE.value = 2.5;
+            } else if (val === 'double-mutant') {
+                dsbSlider.value = 75;
+                cD.value = 3.0;
+                cE.value = 3.0;
+            }
+            updateGuardSimulation();
+        }
+
+        function updateGuardSimulation() {
+            const damage = parseInt(document.getElementById('slider-dna-damage').value);
+            const cD = parseFloat(document.getElementById('slider-cyclinD').value);
+            const cE = parseFloat(document.getElementById('slider-cyclinE').value);
+            const sac = parseInt(document.getElementById('slider-sac').value);
+            const phenotype = document.getElementById('select-phenotype').value;
+
+            document.getElementById('val-dna-damage').innerText = damage + ' DSBs';
+            document.getElementById('val-cyclinD').innerText = cD.toFixed(1) + 'x';
+            document.getElementById('val-cyclinE').innerText = cE.toFixed(1) + 'x';
+            document.getElementById('val-sac-attach').innerText = sac + '%';
+
+            // Signal node activation DOM elements
+            const nodeAtm = document.getElementById('node-atm');
+            const nodeP53 = document.getElementById('node-p53');
+            const nodeP21 = document.getElementById('node-p21');
+            const nodeArrest = document.getElementById('node-arrest');
+            const nodeBax = document.getElementById('node-bax');
+            const fateBadge = document.getElementById('status-fate-badge');
+            const outcomeText = document.getElementById('status-cell-outcome');
+
+            // Reset node styles
+            [nodeAtm, nodeP53, nodeP21, nodeArrest, nodeBax].forEach(n => {
+                n.className = "p-2 rounded bg-gray-900 border border-gray-800 text-gray-400 transition-all duration-300";
+            });
+
+            let populationData = [];
+            let chartColor = '#10B981';
+
+            // Logic Tree for Checkpoint Surveillance
+            const isP53Deficient = (phenotype === 'p53-mutant' || phenotype === 'double-mutant');
+            const isOncogenic = (cD > 2.0 || cE > 2.0 || phenotype === 'oncogene' || phenotype === 'double-mutant');
+
+            if (damage > 0) {
+                nodeAtm.className = "p-2 rounded bg-red-900/40 border border-red-500 text-red-300 font-bold";
+            }
+
+            if (damage > 15 && !isP53Deficient) {
+                nodeP53.className = "p-2 rounded bg-cyan-900/40 border border-cyan-500 text-cyan-300 font-bold glow-cyan";
+                document.getElementById('p53-level-text').innerText = "p53 Active: HIGH (Phosphorylated)";
+
+                if (damage <= 65) {
+                    // Arrest & Repair Path
+                    nodeP21.className = "p-2 rounded bg-green-900/40 border border-green-500 text-green-300 font-bold";
+                    nodeArrest.className = "p-2 rounded bg-amber-900/40 border border-amber-500 text-amber-300 font-bold";
+
+                    guardCellMesh.material.color.setHex(0xf59e0b); // Amber for Arrest
+                    outcomeText.innerHTML = `<i class="fa-solid fa-hand text-amber-400"></i> G1/S CHECKPOINT ARREST (Repair Active)`;
+                    fateBadge.innerText = "Cell Cycle Arrest";
+                    fateBadge.className = "px-2.5 py-1 rounded text-xs font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40";
+
+                    populationData = [100, 100, 100, 100, 100, 100, 100];
+                    chartColor = '#F59E0B';
+                    document.getElementById('guard-insight-text').innerText = "ATM/ATR kinase cascade senses double-strand breaks, phosphorylating p53. Stable p53 transactivates p21 (CDKI), binding Cyclin E/CDK2 to arrest cells for repair.";
+                    document.getElementById('metric-cdk2-inh').innerText = "88% (Arrested)";
+                    document.getElementById('metric-apoptosis-pot').innerText = "Moderate (25%)";
+                    document.getElementById('metric-mutagenesis-risk').innerText = "Low (Protected)";
+                } else {
+                    // Severe Damage -> Apoptosis Path
+                    nodeBax.className = "p-2 rounded bg-magenta-900/40 border border-magenta-500 text-magenta-300 font-bold glow-red";
+
+                    guardCellMesh.material.color.setHex(0xef4444); // Red for Apoptosis
+                    outcomeText.innerHTML = `<i class="fa-solid fa-skull text-red-400"></i> APOPTOSIS INDUCTION (Programmed Cell Death)`;
+                    fateBadge.innerText = "Apoptotic Death";
+                    fateBadge.className = "px-2.5 py-1 rounded text-xs font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/40";
+
+                    populationData = [100, 80, 50, 20, 5, 0, 0];
+                    chartColor = '#EF4444';
+                    document.getElementById('guard-insight-text').innerText = "Lethal DNA damage leads to persistent high p53 levels, driving transcription of pro-apoptotic Bcl-2 members (Bax, PUMA, Noxa). Cytochrome C release triggers Caspase-9/3 execution.";
+                    document.getElementById('metric-cdk2-inh').innerText = "100%";
+                    document.getElementById('metric-apoptosis-pot').innerText = "CRITICAL (98%)";
+                    document.getElementById('metric-mutagenesis-risk').innerText = "N/A (Cell Terminated)";
+                }
+            } else if (damage > 15 && isP53Deficient) {
+                // DNA Damage Present BUT p53 Mutated -> CANCER PROLIFERATION
+                guardCellMesh.material.color.setHex(0xa855f7); // Purple Cancer
+                outcomeText.innerHTML = `<i class="fa-solid fa-biohazard text-purple-400"></i> RUNAWAY CANCEROUS PROLIFERATION (p53 Bypassed)`;
+                fateBadge.innerText = "Malignant Proliferation";
+                fateBadge.className = "px-2.5 py-1 rounded text-xs font-mono font-bold bg-purple-500/20 text-purple-400 border border-purple-500/40";
+
+                document.getElementById('p53-level-text').innerText = "p53 Level: MUTATED / INACTIVE";
+                populationData = [100, 180, 320, 580, 1100, 2200, 4500];
+                chartColor = '#8B5CF6';
+                document.getElementById('guard-insight-text').innerText = "CRITICAL HALLMARK OF CANCER: Loss of p53 tumor suppressor eliminates the G1/S DNA damage checkpoint. Damaged DNA is replicated during S-phase, driving massive genomic instability.";
+                document.getElementById('metric-cdk2-inh').innerText = "0% (Unchecked)";
+                document.getElementById('metric-apoptosis-pot').innerText = "Evasion (0%)";
+                document.getElementById('metric-mutagenesis-risk').innerText = "EXTREME (Oncogenic)";
+            } else if (isOncogenic) {
+                // Hyperactive Cyclin / Oncogene
+                guardCellMesh.material.color.setHex(0x8b5cf6);
+                outcomeText.innerHTML = `<i class="fa-solid fa-[#8B5CF6]"></i> ONCOGENIC HYPERPROLIFERATION`;
+                fateBadge.innerText = "Hyper-Proliferation";
+                fateBadge.className = "px-2.5 py-1 rounded text-xs font-mono font-bold bg-purple-500/20 text-purple-400 border border-purple-500/40";
+
+                populationData = [100, 150, 240, 400, 750, 1300, 2400];
+                chartColor = '#EC4899';
+                document.getElementById('guard-insight-text').innerText = "Proto-oncogene hyperactivation (e.g., overexpression of Cyclin D1 or Ras) forces constitutive CDK phosphorylation, bypassing growth factor requirement.";
+                document.getElementById('metric-cdk2-inh').innerText = "0%";
+                document.getElementById('metric-apoptosis-pot').innerText = "Low";
+                document.getElementById('metric-mutagenesis-risk').innerText = "High";
+            } else {
+                // Normal Homeostasis
+                document.getElementById('p53-level-text').innerText = "p53 Active: Low (Basal)";
+                guardCellMesh.material.color.setHex(0x10b981);
+                outcomeText.innerHTML = `<i class="fa-solid fa-circle-check text-green-400"></i> NORMAL CELL HOMEOSTASIS`;
+                fateBadge.innerText = "Homeostasis";
+                fateBadge.className = "px-2.5 py-1 rounded text-xs font-mono font-bold bg-green-500/20 text-green-400 border border-green-500/40";
+
+                populationData = [100, 105, 110, 115, 120, 125, 130];
+                chartColor = '#10B981';
+                document.getElementById('guard-insight-text').innerText = "Basal signaling conditions: Cyclin-CDK complexes undergo regulated cyclic turnover. p53 is continuously degraded by E3 ubiquitin ligase MDM2.";
+                document.getElementById('metric-cdk2-inh').innerText = "Basal (5%)";
+                document.getElementById('metric-apoptosis-pot').innerText = "Minimal (2%)";
+                document.getElementById('metric-mutagenesis-risk').innerText = "Minimal";
+            }
+
+            // Update Chart
+            if (proliferationChart) {
+                proliferationChart.data.datasets[0].data = populationData;
+                proliferationChart.data.datasets[0].borderColor = chartColor;
+                proliferationChart.update();
+            }
+        }
+
+        function resetGuardParameters() {
+            document.getElementById('select-phenotype').value = 'normal';
+            applyPhenotypePreset();
+        }
+
+        function animateGuardScene() {
+            requestAnimationFrame(animateGuardScene);
+            if (guardControls) guardControls.update();
+
+            if (guardCellMesh) {
+                guardCellMesh.rotation.x += 0.005;
+                guardCellMesh.rotation.y += 0.008;
+            }
+
+            if (p53Particles) {
+                p53Particles.rotation.y -= 0.003;
+            }
+
+            if (guardRenderer && guardScene && guardCamera) {
+                guardRenderer.render(guardScene, guardCamera);
+            }
+        }
+
+
+        /* =========================================================================
+           TAB 4: INSTRUCTIONAL MINI CHART & QUIZ SYSTEM
+           ========================================================================= */
+        function initCyclinMiniChart() {
+            const ctx = document.getElementById('chart-cyclin-mini').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['G1', 'S', 'G2', 'M'],
+                    datasets: [
+                        { label: 'Cyc D', data: [80, 80, 75, 50], borderColor: '#06B6D4', borderWidth: 2 },
+                        { label: 'Cyc E', data: [10, 90, 20, 5], borderColor: '#EC4899', borderWidth: 2 },
+                        { label: 'Cyc A', data: [0, 40, 95, 30], borderColor: '#8B5CF6', borderWidth: 2 },
+                        { label: 'Cyc B', data: [0, 5, 50, 100], borderColor: '#F59E0B', borderWidth: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9CA3AF', font: { size: 9 } } } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#9CA3AF', font: { size: 9 } } },
+                        y: { display: false }
+                    }
+                }
+            });
+        }
+
+        const quizAnswers = { 1: 'B', 2: 'C', 3: 'C' };
+        const quizExplanations = {
+            1: "Correct! Phosphorylated p53 acts as a transcription factor for CDKN1A, which encodes the p21 CDK inhibitor, halting Cyclin E/CDK2.",
+            2: "Correct! Pachytene is the sub-stage of Prophase I where synapsis is complete and crossing over occurs at recombination nodules.",
+            3: "Correct! TP53 loss disables the DNA damage checkpoint, allowing damaged cells to synthesize DNA and divide, leading to cancer."
+        };
+
+        function checkAnswer(qId, option) {
+            const feedbackEl = document.getElementById(`q${qId}-feedback`);
+            feedbackEl.classList.remove('hidden');
+
+            if (option === quizAnswers[qId]) {
+                feedbackEl.className = "text-xs font-semibold mt-1 text-green-400";
+                feedbackEl.innerText = quizExplanations[qId];
+            } else {
+                feedbackEl.className = "text-xs font-semibold mt-1 text-red-400";
+                feedbackEl.innerText = "Incorrect. Try again!";
+            }
+        }
+
+
+        /* =========================================================================
+           WINDOW RESIZE & INITIALIZATION
+           ========================================================================= */
+        function onWindowResize() {
+            // Resize Cell 3D
+            const cellCont = document.getElementById('cell-3d-container');
+            if (cellCont && cellRenderer && cellCamera) {
+                cellCamera.aspect = cellCont.clientWidth / cellCont.clientHeight;
+                cellCamera.updateProjectionMatrix();
+                cellRenderer.setSize(cellCont.clientWidth, cellCont.clientHeight);
+            }
+
+            // Resize Meiosis 3D
+            const meiosisCont = document.getElementById('meiosis-3d-container');
+            if (meiosisCont && meiosisRenderer && meiosisCamera) {
+                meiosisCamera.aspect = meiosisCont.clientWidth / meiosisCont.clientHeight;
+                meiosisCamera.updateProjectionMatrix();
+                meiosisRenderer.setSize(meiosisCont.clientWidth, meiosisCont.clientHeight);
+            }
+
+            // Resize Guard 3D
+            const guardCont = document.getElementById('guard-3d-container');
+            if (guardCont && guardRenderer && guardCamera) {
+                guardCamera.aspect = guardCont.clientWidth / guardCont.clientHeight;
+                guardCamera.updateProjectionMatrix();
+                guardRenderer.setSize(guardCont.clientWidth, guardCont.clientHeight);
+            }
+        }
+
+        window.onload = function() {
+            initCell3D();
+            initMeiosis3D();
+            initGuard3D();
+            initCyclinMiniChart();
+        };
+    </script>
+</body>
+</html>
